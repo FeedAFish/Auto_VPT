@@ -5,7 +5,6 @@ import win32ui
 import win32con
 import numpy as np
 import ast
-import time
 from PIL import Image
 
 # Define constants for mouse events
@@ -23,9 +22,8 @@ AUTO_ON_2 = np.asarray(AUTO_ON_2)
 del content
 
 
-def click_window(title, x, y):
+def click_window(hwnd, x, y):
     # Get the handle of the window
-    hwnd = win32gui.FindWindow(None, title)
     if hwnd:
         # Convert coordinates to LPARAM
         lparam = (y << 16) | x
@@ -37,57 +35,54 @@ def click_window(title, x, y):
         raise Exception("Window not found.")
 
 
-def screenshot_window_to_gray_numpy(title, x=None, y=None, w=None, h=None):
-    hwnd = win32gui.FindWindow(None, title)
-    if x is None or y is None or w is None or h is None:
-        left, top, right, bot = win32gui.GetClientRect(hwnd)
-        x, y, w, h = left, top, right - left, bot - top
-    hwndDC = win32gui.GetWindowDC(hwnd)
-    mfcDC = win32ui.CreateDCFromHandle(hwndDC)
-    saveDC = mfcDC.CreateCompatibleDC()
+class WindowCapture:
+    def __init__(self, hwnd):
+        self.hwnd = hwnd
+        self.hwndDC = win32gui.GetWindowDC(self.hwnd)
+        self.mfcDC = win32ui.CreateDCFromHandle(self.hwndDC)
+        self.saveDC = self.mfcDC.CreateCompatibleDC()
+        self.bitmap = win32ui.CreateBitmap()
 
-    saveBitMap = win32ui.CreateBitmap()
-    saveBitMap.CreateCompatibleBitmap(mfcDC, w, h)
-    saveDC.SelectObject(saveBitMap)
+    def __del__(self):
+        self.cleanup()
 
-    saveDC.BitBlt((0, 0), (w, h), mfcDC, (x, y), win32con.SRCCOPY)
+    def cleanup(self):
+        if hasattr(self, "bitmap"):
+            win32gui.DeleteObject(self.bitmap.GetHandle())
+            self.saveDC.DeleteDC()
+            self.mfcDC.DeleteDC()
+            win32gui.ReleaseDC(self.hwnd, self.hwndDC)
 
-    bmpstr = saveBitMap.GetBitmapBits(True)
-    img_array = np.frombuffer(bmpstr, dtype=np.uint8)
-    img_array.shape = (h, w, 4)  # BGR format
+    def capture_gray(self, x, y, w, h):
+        if x is None or y is None or w is None or h is None:
+            left, top, right, bot = win32gui.GetClientRect(self.hwnd)
+            x, y, w, h = left, top, right - left, bot - top
+        self.bitmap.CreateCompatibleBitmap(self.mfcDC, w, h)
+        self.saveDC.SelectObject(self.bitmap)
+        self.saveDC.BitBlt((0, 0), (w, h), self.mfcDC, (x, y), win32con.SRCCOPY)
 
-    img_array = img_array[..., :3]
-
-    gray = np.dot(img_array, [0.114, 0.587, 0.299]).astype(np.uint8)
-    return gray
-
-
-def get_ava_available(title):
-    x, y, w, h = DICT["Ava"]
-    screenshot_window_to_gray_numpy(title, x, y, w, h)
+        bmpstr = self.bitmap.GetBitmapBits(True)
+        img = np.frombuffer(bmpstr, dtype=np.uint8)
+        img.shape = (h, w, 4)
+        return np.dot(img[..., :3], [0.114, 0.587, 0.299]).astype(np.uint8)
 
 
 class Auto_VPT:
     def __init__(self, title):
-        self.title = title
-        self.ava = get_ava_available(self.title)
+        self.hwnd = win32gui.FindWindow(None, title)
+        self.capture = WindowCapture(self.hwnd)
+        self.ava = self.capture.capture_gray(*DICT["Ava"])
         self.auto = True
-        # self.auto_toggle()
 
     def auto_is_on(self):
-        auto_available = screenshot_window_to_gray_numpy(self.title, *DICT["Auto"])
+        auto_available = self.capture.capture_gray(*DICT["Auto"])
         return np.array_equal(auto_available, AUTO_ON_1) or np.array_equal(
             auto_available, AUTO_ON_2
         )
 
     def not_in_fight(self):
-        return np.array_equal(get_ava_available(self.title), self.ava)
+        return np.array_equal(self.capture.capture_gray(*DICT["Ava"]), self.ava)
 
     def auto_toggle(self):
         if self.not_in_fight() and not self.auto_is_on():
-            click_window(self.title, *DICT["Auto Click"][:2])
-
-    def loop_auto(self):
-        while self.auto:
-            self.auto_toggle()
-            time.sleep(2)
+            click_window(self.hwnd, *DICT["Auto Click"][:2])
