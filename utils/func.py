@@ -19,6 +19,8 @@ AUTO_ON_1 = Image.open("img/auto_available.png")
 AUTO_ON_1 = np.asarray(AUTO_ON_1)
 AUTO_ON_2 = Image.open("img/auto_available_2.png")
 AUTO_ON_2 = np.asarray(AUTO_ON_2)
+AUTO_CB = Image.open("img/AutoCB.png")
+AUTO_CB = np.asarray(AUTO_CB)
 del content
 
 
@@ -83,6 +85,13 @@ class Auto_VPT:
     def not_in_fight(self):
         return np.array_equal(self.capture.capture_gray(*DICT["Ava"]), self.ava)
 
+    def auto_off_in_fight(self):
+        return np.array_equal(self.capture.capture_gray(*DICT["AutoCB"]), AUTO_CB)
+
     def auto_toggle(self):
         if self.not_in_fight() and not self.auto_is_on():
+            print(1)
             click_window(self.hwnd, *DICT["Auto Click"][:2])
+        if not self.not_in_fight() and self.auto_off_in_fight():
+            print(2)
+            click_window(self.hwnd, *DICT["CB Click"][:2])
