@@ -2,9 +2,10 @@ import tkinter as tk
 from tkinter import ttk
 import csv
 import os
+from utils import func
 
 
-class CSVViewer:
+class UI:
     def __init__(self, file_path):
         # Set up the main window
         self.root = tk.Tk()
@@ -15,10 +16,11 @@ class CSVViewer:
         # Data initiates
         self.file_path = file_path
         self.current_page = 0
-        self.rows_per_page = 5
+        self.rows_per_page = 5  # Set the number of rows per page
 
         # Load data from the CSV file
         self.data = self.load_csv_data()
+        self.new_row_window = None
 
         # Set up the UI
         self.setup_ui()
@@ -62,29 +64,40 @@ class CSVViewer:
                 f"# {i+1}", width=max_width * 10 + 10, anchor=tk.W, stretch=False
             )
 
+        # Stretch the to fill
         self.tree.column(f"# {len(self.data[0])}", minwidth=100, stretch=tk.YES)
 
         self.tree.grid(row=0, column=0, columnspan=2, sticky="nsew")
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
-        # Buttons to navigate pages
-        button_frame = tk.Frame(self.root)
-        button_frame.grid(row=1, column=0, sticky=tk.W, padx=10, pady=10)
+
+        # Buttons to manage data and navigate
+        left_button_frame = tk.Frame(self.root)
+        left_button_frame.grid(row=1, column=0, sticky=tk.W, padx=10, pady=10)
+
+        right_button_frame = tk.Frame(self.root)
+        right_button_frame.grid(row=1, column=1, sticky=tk.E, padx=10, pady=10)
 
         button_list = {
             "Previous": self.show_prev_page,
             "Next": self.show_next_page,
             "Remove Selected": self.remove_selected,
             "Add Row": self.add_row,
+            "Launch": self.launch,
         }
         for text, command in button_list.items():
-            button = tk.Button(button_frame, text=text, command=command)
-            button.pack(side=tk.LEFT, padx=5)
+
+            if text == "Launch":
+                button = tk.Button(right_button_frame, text=text, command=command)
+                button.pack(side=tk.RIGHT, padx=5)
+            else:
+                button = tk.Button(left_button_frame, text=text, command=command)
+                button.pack(side=tk.LEFT, padx=5)
         # Show initial data
         self.update_tree()
 
     # Handle page navigation
-    def update_tree(self):
+    def update_tree(self):  # Update the treeview
         # Clear existing data
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -99,7 +112,6 @@ class CSVViewer:
             self.tree.insert("", tk.END, values=row)
 
     def remove_selected(self):  # Remove selected data
-        """Remove the selected row from the data."""
         selected_item = self.tree.selection()
         if selected_item:
             # Get the selected item's values
@@ -117,9 +129,12 @@ class CSVViewer:
             # Update the treeview
             self.update_tree()
 
-    def add_row(self):
-        new_row_window = tk.Toplevel(self.root)
-        new_row_window.title("Add New Account")
+    def add_row(self):  # Add new data
+        if self.new_row_window and self.new_row_window.winfo_exists():
+            self.new_row_window.lift()  # Bring window to front
+            return
+        self.new_row_window = tk.Toplevel(self.root)
+        self.new_row_window.title("Add New Account")
 
         if len(self.data) > 1:  # Ensure the first row is skipped (header row)
             ids = [
@@ -133,8 +148,10 @@ class CSVViewer:
         for i, column in enumerate(self.data[0]):
             if i == 0:
                 continue
-            tk.Label(new_row_window, text=column).grid(row=i, column=0, padx=5, pady=5)
-            entry = tk.Entry(new_row_window)
+            tk.Label(self.new_row_window, text=column).grid(
+                row=i, column=0, padx=5, pady=5
+            )
+            entry = tk.Entry(self.new_row_window)
             entry.grid(row=i, column=1, padx=5, pady=5)
             entries.append(entry)
 
@@ -144,18 +161,31 @@ class CSVViewer:
             self.save_csv_data()
             self.data = self.load_csv_data()
             self.update_tree()
-            new_row_window.destroy()
+            self.new_row_window.destroy()
 
-        tk.Button(new_row_window, text="Save", command=save_new_row).grid(
+        tk.Button(self.new_row_window, text="Save", command=save_new_row).grid(
             row=len(self.data[0]), column=0, columnspan=2, pady=10
         )
 
-    def show_prev_page(self):
+    def show_prev_page(self):  # Show previous page
         if self.current_page > 0:
             self.current_page -= 1
             self.update_tree()
 
-    def show_next_page(self):
+    def show_next_page(self):  # Show next page
         if (self.current_page + 1) * self.rows_per_page < len(self.data) - 1:
             self.current_page += 1
             self.update_tree()
+
+    # Launch the game
+    def launch(self):
+        selected_item = self.tree.selection()
+        if selected_item:
+            values = self.tree.item(selected_item)["values"]
+            args = {
+                "name": values[1],
+                "server": values[2],
+                "user": values[3],
+                "password": values[4],
+            }
+            func.run_flash(**args)

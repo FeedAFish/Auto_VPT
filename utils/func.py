@@ -109,6 +109,6 @@ def run_flash(name, server, user, password):
     def f(hwnd, name):
         title = win32gui.GetWindowText(hwnd)
         if title == "Adobe Flash Player 34":
-            win32gui.SetWindowText(hwnd, name)
+            win32gui.SetWindowText(hwnd, str(name))
 
     win32gui.EnumWindows(f, name)
