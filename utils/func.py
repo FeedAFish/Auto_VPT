@@ -5,7 +5,9 @@ import win32ui
 import win32con
 import numpy as np
 import ast
+import subprocess
 from PIL import Image
+import threading
 
 # Define constants for mouse events
 WM_LBUTTONDOWN = 0x0201
@@ -95,3 +97,18 @@ class Auto_VPT:
         if not self.not_in_fight() and self.auto_off_in_fight():
             print(2)
             click_window(self.hwnd, *DICT["CB Click"][:2])
+
+
+def run_flash(name, server, user, password):
+    def to_link(server, user, password):
+        return rf"https://s3-vuaphapthuat.goplay.vn/s/{server}/GameLoader.swf?user={user}&pass={password}&isExpand=true"
+
+    subprocess.Popen(["./flash.exe", to_link(server, user, password)])
+    threading.Event().wait(1)
+
+    def f(hwnd, name):
+        title = win32gui.GetWindowText(hwnd)
+        if title == "Adobe Flash Player 34":
+            win32gui.SetWindowText(hwnd, name)
+
+    win32gui.EnumWindows(f, name)
